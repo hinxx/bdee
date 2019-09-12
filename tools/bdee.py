@@ -6,23 +6,22 @@ import os
 import configparser
 
 
-packages_dir = os.path.realpath(os.path.dirname(os.path.realpath(__file__)) + '/../packages')
+packages_config = os.path.realpath(os.path.dirname(os.path.realpath(__file__)) + '/../packages/packages.ini')
 
 
 def main():
     print("arguments: %s" % sys.argv)
-    print("packages folder: %s" % packages_dir)
-    package_files = []
-    for name in os.listdir(packages_dir):
-        if name.endswith('.pkg'):
-            package_files.append(name)
-    print("package files: %s" % package_files)
+    print("packages config: %s" % packages_config)
     parser = configparser.ConfigParser()
-    for name in package_files:
-        pkg_file = os.path.join(packages_dir, name)
-        parser.read(pkg_file)
-        print("dump pkg file '%s'" % pkg_file)
-        print(parser)
+    parser.read(packages_config)
+    print("dump pkg file '%s' sections" % packages_config)
+    print(parser.sections())
+    for section in parser.sections():
+        print("SECTION: %s" % section)
+        print("OPTIONS:")
+        for item in parser[section].items():
+            print(item)
+
 
 if __name__ == '__main__':
     main()
