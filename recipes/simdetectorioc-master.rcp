@@ -1,0 +1,11 @@
+epics-base			branch=7.0
+autosave			branch=master
+sncseq				branch=master
+asyn				branch=master
+busy				branch=master
+sscan				branch=master
+calc				branch=master
+adsupport			branch=master
+adcore				branch=master
+adsimdetector		branch=master
+simdectorioc		branch=master

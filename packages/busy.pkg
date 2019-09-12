@@ -1,0 +1,4 @@
+NAME="busy"
+REPO="https://github.com/epics-modules/busy.git"
+BRANCHES="master"
+TAGS=""

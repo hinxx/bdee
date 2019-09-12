@@ -1,0 +1,4 @@
+NAME="asyn"
+REPO="https://github.com/epics-modules/asyn.git"
+BRANCHES="master"
+TAGS="R4-36 R4-35"
