@@ -1,4 +1,8 @@
+# all modules and IOC
 CHECK_RELEASE = YES
+
+# sncseq
+RE2C = re2c
 
 # asyn
 DRV_USBTMC = YES

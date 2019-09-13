@@ -26,54 +26,164 @@ work_path=$(pwd)
 # awk "/^$p[[:space:]]+TAGG/ { \$1=\$2=\"\"; print \$0; }" $packages_config
 
 
-function name() {
+function cfg_name() {
 	awk "/^$1[[:space:]]+NAME/ { print \$3; }" $packages_config
 }
 
-function repo() {
+function cfg_repo() {
 	awk "/^$1[[:space:]]+REPO/ { print \$3; }" $packages_config
 }
 
-function tag() {
+function cfg_tag() {
 	awk "/^$1[[:space:]]+TAG/ { print \$3; }" $packages_config
 }
 
-function branch() {
+function cfg_branch() {
 	awk "/^$1[[:space:]]+BRANCH/ { print \$3; }" $packages_config
 }
 
-function path() {
-	echo $work_path/$1
+function cfg_remote() {
+	awk "/^$1[[:space:]]+REMOTE/ { print \$3; }" $packages_config
 }
 
-function chain() {
+function cfg_chain() {
 	awk "/^$1[[:space:]]+CHAIN/ { print \$3; }" $recipes_config
 }
 
-echo
-echo -n 'name of ASYN: '
-name asyn
-echo -n 'repo of ASYN: '
-repo asyn
-echo -n 'tags of ASYN:'
-for t in $(tag asyn)
+function pkg_path() {
+	echo $work_path/$1
+}
+
+function pkg_name() {
+	echo "$1" | cut -f1 -d:
+}
+
+function pkg_version() {
+	echo "$1" | cut -f2 -d:
+}
+
+function test1() {
+
+	echo
+	echo -n 'name of ASYN: '
+	name asyn
+	echo
+	echo -n 'repo of ASYN: '
+	repo asyn
+	echo
+	echo -n 'remote of ASYN: '
+	remote asyn
+	echo
+	echo -n 'tags of ASYN:'
+	for t in $(tag asyn)
+	do
+		echo -n " $t"
+	done
+	echo
+
+	echo
+	echo -n 'branches of ADCORE:'
+	for t in $(branch adcore)
+	do
+		echo -n " $t"
+	done
+	echo
+
+	echo
+	echo -n 'path of ADCORE: '
+	path adcore
+
+	echo
+	echo -n 'chain of BAR:'
+	for t in $(chain bar)
+	do
+		echo -n " $t"
+	done
+	echo
+}
+
+
+function clone() {
+	local repo=$(cfg_repo $1)
+	local path=$(pkg_path $1)
+	if [[ -d $path ]]; then
+		echo package $1 path $path exists, not cloning repo $repo
+		return 0
+	fi
+
+	echo git clone $repo $1
+	git clone $repo $1
+}
+
+function checkout() {
+	local path=$(pkg_path $1)
+	if [[ ! -d $path ]]; then
+		echo package $1 path $path does NOT exists, can not checkout
+		return 1
+	fi
+
+	# TODO: Should we check for current branch/tag or
+	# just perform checkout? See git describe --all.
+	echo git -C $path checkout $2
+	git -C $path checkout $2
+}
+
+function config() {
+	local path=$(pkg_path $1)
+	if [[ ! -d $path ]]; then
+		echo package $1 path $path does NOT exists, can not config
+		return 1
+	fi
+
+	if [[ $1 = 'epics-base' ]]; then
+		echo nothing to configure for epics-base..
+		return 0
+	fi
+
+	grep -q "^# BDEE local RELEASE$" $path/configure/RELEASE
+	if [[ $? -ne 0 ]]; then
+		echo package $1 configure/RELEASE update
+		sed -e '/^[^#]/ s/^#*/### /' -i $path/configure/RELEASE
+		echo '# BDEE local RELEASE' >> $path/configure/RELEASE
+		echo "include \$(TOP)/../RELEASE.local" >> $path/configure/RELEASE
+	else
+		echo package $1 configure/RELEASE already updated
+	fi
+
+	grep -q "^# BDEE local CONFIG_SITE$" $path/configure/CONFIG_SITE
+	if [[ $? -ne 0 ]]; then
+		echo package $1 configure/CONFIG_SITE update
+		sed -e '/^[^#]/ s/^#*/### /' -i $path/configure/CONFIG_SITE
+		echo '# BDEE local CONFIG_SITE' >> $path/configure/CONFIG_SITE
+		echo "include \$(TOP)/../CONFIG_SITE.local" >> $path/configure/CONFIG_SITE
+	else
+		echo package $1 configure/CONFIG_SITE already updated
+	fi
+}
+
+function build() {
+	local path=$(pkg_path $1)
+	if [[ ! -d $path ]]; then
+		echo package $1 path $path does NOT exists, can not build
+		return 1
+	fi
+
+	echo make -j -C $path
+	make -j -C $path
+}
+
+
+
+for uid in $(cfg_chain $1)
 do
-	echo -n " $t"
+	echo
+	echo package uid: $uid
+	clone $(pkg_name $uid)
+	checkout $(pkg_name $uid) $(pkg_version $uid)
+	config $(pkg_name $uid)
+	build $(pkg_name $uid)
+	echo
 done
-echo
-
-echo -n 'branches of ADCORE:'
-for t in $(branch adcore)
-do
-	echo -n " $t"
-done
-echo
-
-echo -n 'path of ADCORE: '
-path adcore
-
-echo -n 'chain of BAR: '
-chain bar
 
 echo
 echo "success!"
