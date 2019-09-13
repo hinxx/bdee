@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.6
+#!/usr/bin/env python3
 #
 
 import sys
@@ -6,7 +6,14 @@ import os
 import configparser
 import pprint
 import pdb
+import datetime
+import getpass
+import socket
+import shutil
+import subprocess
 
+
+files_path = os.path.realpath(os.path.dirname(os.path.realpath(__file__)) + '/../files')
 packages_config = os.path.realpath(os.path.dirname(os.path.realpath(__file__)) + '/../packages/packages.ini')
 recipes_config = os.path.realpath(os.path.dirname(os.path.realpath(__file__)) + '/../recipes/recipes.ini')
 workspace_path = os.path.realpath(os.path.curdir)
@@ -111,18 +118,34 @@ def recipe_chain(recipes, recipe_uid, reverse=False):
     return chain
 
 
+def load_chain(packages, recipes, recipe_uid):
+    raw_chain = recipes[recipe_uid]['chain']
+    chain = []
+    for raw_item in raw_chain:
+        name, version = raw_item.split(':')
+        item = packages[name]
+        item['path'] = os.path.join(workspace_path, item['name'])
+        item['version'] = version
+        item['want_tag'] = False
+        item['want_branch'] = False
+        if len(item['branches']) and version in item['branches']:
+            item['want_branch'] = True
+        if len(item['tags']) and version in item['tags']:
+            item['want_tag'] = True
+
+        chain.append(item)
+    return chain
+
+
 def prepare_workspace(packages, recipes, recipe_uid):
-    release_str = ""
+    release_file = open('RELEASE.local', 'w')
     for item in recipe_chain(recipes, recipe_uid):
         package_name, package_version = item.split(':')
         package_var = package_name.upper()
         package_path = os.path.join(workspace_path, package_name)
         package_str = "%s=%s" % (package_var, package_path)
-        print(package_str)
-        release_str += package_str + "\n"
-
-    release_file = open('RELEASE.local', 'w')
-    release_file.write(release_str)
+        # print(package_str)
+        release_file.write(package_str+'\n')
     release_file.close()
 
 
@@ -134,16 +157,80 @@ def provide_packages(packages, recipes, recipe_uid):
         package_build(packages[package_name])
 
 
+def generate_meta(chain):
+    meta_file = os.path.join(workspace_path, 'meta.txt')
+    handle = open(meta_file, 'w')
+    handle.write('date %s\n' % datetime.datetime.now())
+    handle.write('user %s\n' % getpass.getuser())
+    # handle.write('hostname %s\n' % socket.gethostname())
+    handle.write('hostname %s\n' % socket.getfqdn())
+    handle.write('number of packages %d\n' % len(chain))
+    handle.write('\n')
+    index = 1
+    for item in chain:
+        handle.write('package #%d\n' % index)
+        handle.write('name %s\n' % item['name'])
+        handle.write('version %s\n' % item['version'])
+        handle.write('branches %s\n' % str(item['branches']))
+        handle.write('tags %s\n' % str(item['tags']))
+        handle.write('repo %s\n' % item['repo'])
+        handle.write('path %s\n' % item['path'])
+        handle.write('\n')
+        index += 1
+    handle.close()
+
+
+def generate_release_local(chain):
+    release_file = os.path.join(workspace_path, 'RELEASE.local')
+    handle = open(release_file, 'w')
+    for item in chain:
+        line = "%s=%s" % (item['name'].upper(), item['path'])
+        print('RELEASE.local line: %s' % line)
+        handle.write(line + '\n')
+    handle.close()
+
+
+def generate_config_site_local():
+    output_file = os.path.join(workspace_path, 'CONFIG_SITE.local')
+    input_file = os.path.join(files_path, 'CONFIG_SITE.local')
+    shutil.copyfile(input_file, output_file)
+
+
+def handle_chain(chain):
+    for item in chain:
+        package_clone(item)
+        package_checkout(item)
+        package_configure(item)
+
+
 def package_clone(package):
-    name = package['name']
-    repo = package['repo']
-    print("git clone %s %s" % (repo, name))
+    if not os.path.isdir(package['path']):
+        print("git clone %s %s" % (package['repo'], package['name']))
+        subprocess.run(['git', 'clone', package['repo'], package['name']])
+    else:
+        print("already cloned %s into %s" % (package['name'], package['path']))
 
 
-def package_checkout(package, version):
-    name = package['name']
-    path = os.path.join(workspace_path, name)
-    print("git -C %s checkout %s" % (path, version))
+def package_checkout(package):
+    if not os.path.isdir(package['path']):
+        print("package %s path %s does not exists!" % (package['name'], package['path']))
+    else:
+        print("git -C %s checkout %s" % (package['path'], package['version']))
+        subprocess.run(['git', '-C', package['path'], 'checkout', package['version']])
+
+
+def package_configure(package):
+    if not os.path.isdir(package['path']):
+        print("package %s path %s does not exists!" % (package['name'], package['path']))
+    else:
+        release_file = os.path.join(package['path'], 'configure', 'RELEASE')
+        handle = open(release_file, 'r')
+        lines = handle.readlines()
+        for line in lines:
+            if not line.startswith('#'):
+                print('LINE: ' + line)
+        handle.close()
+
 
 
 def package_build(package):
@@ -178,6 +265,10 @@ def package_distclean(package):
 
 def main():
     print("arguments: %s" % sys.argv)
+    if len(sys.argv) == 1:
+        print("Missing argument!")
+        exit(1)
+
     print("packages config: %s" % packages_config)
     print("recipes config: %s" % recipes_config)
 
@@ -252,13 +343,23 @@ def main():
     ok = sanity_check(packages, recipes, recipe_uid)
     print("SANE " + str(ok))
 
-    chain = recipe_chain(recipes, recipe_uid)
-    print("CHAIN " + str(chain))
+    # chain = recipe_chain(recipes, recipe_uid)
+    # print("CHAIN " + str(chain))
 
-    reverse_chain = recipe_chain(recipes, recipe_uid, True)
-    print("REVERSED CHAIN " + str(reverse_chain))
+    # reverse_chain = recipe_chain(recipes, recipe_uid, True)
+    # print("REVERSED CHAIN " + str(reverse_chain))
 
-    prepare_workspace(packages, recipes, recipe_uid)
+    # prepare_workspace(packages, recipes, recipe_uid)
+
+    chain = load_chain(packages, recipes, recipe_uid)
+    print("LOADED CHAIN:")
+    pprint.pprint(chain)
+
+    generate_meta(chain)
+    generate_release_local(chain)
+    generate_config_site_local()
+
+    handle_chain(chain)
 
 
 if __name__ == '__main__':
