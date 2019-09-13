@@ -5,7 +5,10 @@
 
 packages_config=$(realpath $(dirname $0)/../packages/packages.cfg)
 recipes_config=$(realpath $(dirname $0)/../recipes/recipes.cfg)
+files_path=$(realpath $(dirname $0)/../files)
 work_path=$(pwd)
+
+
 
 # echo GREP looking for adcore package:
 # grep ^adcore $packages_config
@@ -102,6 +105,25 @@ function test1() {
 	echo
 }
 
+function generate_release_local() {
+	rm -f RELEASE.local
+	echo "# created $(date) by $USER @ $(hostname)" >> RELEASE.local
+	for uid in $(cfg_chain $1)
+	do
+		local name=$(pkg_name $uid)
+		local path=$(pkg_path $name)
+		local name_upper=$(echo $name | tr [a-z] [A-Z] | tr '-' '_')
+		echo "$name_upper=$path" >> RELEASE.local
+	done
+	# echo RELEASE.local content for chain $1:; cat RELEASE.local
+}
+
+function generate_configsite_local() {
+	rm -f CONFIG_SITE.local
+	echo "# created $(date) by $USER @ $(hostname)" >> CONFIG_SITE.local
+	cat $files_path/CONFIG_SITE.local >> CONFIG_SITE.local
+	# echo CONFIG_SITE.local content for chain $1:; cat CONFIG_SITE.local
+}
 
 function clone() {
 	local repo=$(cfg_repo $1)
@@ -173,6 +195,8 @@ function build() {
 }
 
 
+generate_release_local $1
+generate_configsite_local $1
 
 for uid in $(cfg_chain $1)
 do
