@@ -33,6 +33,10 @@ function cfg_name() {
 	awk "/^$1[[:space:]]+NAME/ { print \$3; }" $packages_config
 }
 
+function cfg_group() {
+	awk "/^$1[[:space:]]+GROUP/ { print \$3; }" $packages_config
+}
+
 function cfg_repo() {
 	awk "/^$1[[:space:]]+REPO/ { print \$3; }" $packages_config
 }
@@ -47,6 +51,10 @@ function cfg_branch() {
 
 function cfg_remote() {
 	awk "/^$1[[:space:]]+REMOTE/ { print \$3; }" $packages_config
+}
+
+function cfg_config() {
+	awk "/^$1[[:space:]]+CONFIG/ { print \$3; }" $packages_config
 }
 
 function cfg_chain() {
@@ -157,29 +165,61 @@ function config() {
 		return 1
 	fi
 
-	if [[ $1 = 'epics-base' ]]; then
+	local group=$(cfg_group $1)
+	if [[ $group = bases ]]; then
 		echo nothing to configure for epics-base..
 		return 0
-	fi
-
-	grep -q "^# BDEE local RELEASE$" $path/configure/RELEASE
-	if [[ $? -ne 0 ]]; then
-		echo package $1 configure/RELEASE update
-		sed -e '/^[^#]/ s/^#*/### /' -i $path/configure/RELEASE
-		echo '# BDEE local RELEASE' >> $path/configure/RELEASE
-		echo "include \$(TOP)/../RELEASE.local" >> $path/configure/RELEASE
-	else
-		echo package $1 configure/RELEASE already updated
-	fi
-
-	grep -q "^# BDEE local CONFIG_SITE$" $path/configure/CONFIG_SITE
-	if [[ $? -ne 0 ]]; then
-		echo package $1 configure/CONFIG_SITE update
-		sed -e '/^[^#]/ s/^#*/### /' -i $path/configure/CONFIG_SITE
-		echo '# BDEE local CONFIG_SITE' >> $path/configure/CONFIG_SITE
-		echo "include \$(TOP)/../CONFIG_SITE.local" >> $path/configure/CONFIG_SITE
-	else
-		echo package $1 configure/CONFIG_SITE already updated
+	elif [[ $group = modules ]] || [[ $group = iocs ]]; then
+		if [[ -z $(grep -q "^# BDEE local RELEASE$" $path/configure/RELEASE) ]]; then
+			echo package $1 configure/RELEASE update
+			sed -e '/^[^#]/ s/^#*/### /' -i $path/configure/RELEASE
+			echo '# BDEE local RELEASE' >> $path/configure/RELEASE
+			echo "include \$(TOP)/../RELEASE.local" >> $path/configure/RELEASE
+		else
+			echo package $1 configure/RELEASE already updated
+		fi
+		if [[ -z $(grep -q "^# BDEE local CONFIG_SITE$" $path/configure/CONFIG_SITE) ]]; then
+			echo package $1 configure/CONFIG_SITE update
+			sed -e '/^[^#]/ s/^#*/### /' -i $path/configure/CONFIG_SITE
+			echo '# BDEE local CONFIG_SITE' >> $path/configure/CONFIG_SITE
+			echo "include \$(TOP)/../CONFIG_SITE.local" >> $path/configure/CONFIG_SITE
+		else
+			echo package $1 configure/CONFIG_SITE already updated
+		fi
+	elif [[ $group = support ]]; then
+		if [[ ! -f $path/configure ]]; then
+			# try to use autogen.sh script to generate configure script
+			if [[ -f $path/autogen.sh ]]; then
+				pushd $path >/dev/null
+				echo ./autogen.sh --prefix=$path $(cfg_config $1)
+				./autogen.sh --prefix=$path $(cfg_config $1)
+				popd >/dev/null
+			else
+				echo autogen.sh not found in $path
+			fi
+		fi
+		if [[ ! -f $path/configure ]]; then
+			# try to run autoreconf to generate configure script
+			if [[ -f $path/configure.ac ]]; then
+				pushd $path >/dev/null
+				echo autoreconf -si
+				autoreconf -si
+				popd >/dev/null
+			else
+				echo configure.ac not found in $path
+			fi
+		fi
+		if [[ ! -f $path/Makefile ]]; then
+			if [[ -f $path/configure ]]; then
+				pushd $path >/dev/null
+				echo ./configure --prefix=$path $(cfg_config $1)
+				./configure --prefix=$path $(cfg_config $1)
+				popd >/dev/null
+			else
+				echo configure not found in $path
+			fi
+		fi
+		[[ -f $path/Makefile ]] || echo source $path does not contain Makefile
 	fi
 }
 
@@ -190,8 +230,8 @@ function build() {
 		return 1
 	fi
 
-	echo make -j -C $path
-	make -j -C $path
+	echo make -j -C $path install
+	make -j -C $path install
 }
 
 function clean() {
@@ -216,7 +256,6 @@ if [[ $CMD = clean ]]; then
 	uids=$(echo "$uids" | tac)
 fi
 echo uids: $uids
-exit 33
 
 for uid in $uids
 do
@@ -225,7 +264,7 @@ do
 	clone $(pkg_name $uid)
 	checkout $(pkg_name $uid) $(pkg_version $uid)
 	config $(pkg_name $uid)
-	# build $(pkg_name $uid)
+	build $(pkg_name $uid)
 	echo
 done
 
