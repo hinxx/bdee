@@ -194,18 +194,38 @@ function build() {
 	make -j -C $path
 }
 
+function clean() {
+	local path=$(pkg_path $1)
+	if [[ ! -d $path ]]; then
+		echo package $1 path $path does NOT exists, can not clean
+		return 1
+	fi
 
-generate_release_local $1
-generate_configsite_local $1
+	echo make -C $path clean
+	make -C $path clean
+}
 
-for uid in $(cfg_chain $1)
+CMD=$1
+CHAIN=$2
+
+generate_release_local $CHAIN
+generate_configsite_local $CHAIN
+
+uids=$(cfg_chain $CHAIN)
+if [[ $CMD = clean ]]; then
+	uids=$(echo "$uids" | tac)
+fi
+echo uids: $uids
+exit 33
+
+for uid in $uids
 do
 	echo
 	echo package uid: $uid
 	clone $(pkg_name $uid)
 	checkout $(pkg_name $uid) $(pkg_version $uid)
 	config $(pkg_name $uid)
-	build $(pkg_name $uid)
+	# build $(pkg_name $uid)
 	echo
 done
 
