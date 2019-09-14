@@ -4,6 +4,7 @@
 # set -x
 
 work_path=$(pwd)
+bin_path=$(realpath $(dirname $0))
 share_path=$(realpath $(dirname $0)/../share)
 packages_config=$share_path/packages.cfg
 recipes_config=$share_path/recipes.cfg
@@ -243,6 +244,23 @@ function clean() {
   make -C $path clean
 }
 
+function pack() {
+  local path=$(pkg_path $1)
+  if [[ ! -d $path ]]; then
+    echo package $1 path $path does NOT exists, can not pack
+    return 1
+  fi
+
+  # from https://makeself.io/
+  $bin_path/makeself.sh \
+    --bzip2 \
+    --nooverwrite \
+    $path/bin \
+    $1.sh \
+    "BDEE package for $1" \
+    true
+}
+
 ###########################################################################
 function usage() {
   echo
@@ -356,6 +374,7 @@ do
     pull)       pull $name ;;
     status)     status $name ;;
     diff)       diff $name ;;
+    pack)       pack $name ;;
 
     *) echo unknown command \'$CMD\', aborting!; exit 1 ;;
   esac
