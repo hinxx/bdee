@@ -8,27 +8,6 @@ recipes_config=$(realpath $(dirname $0)/../recipes/recipes.cfg)
 files_path=$(realpath $(dirname $0)/../files)
 work_path=$(pwd)
 
-
-
-# echo GREP looking for adcore package:
-# grep ^adcore $packages_config
-
-# echo GREP looking for foo package:
-# grep ^foo $packages_config
-
-# one option line per section
-# echo
-# echo AWK looking for adcore package:
-# p=adcore
-# awk "/^$p[[:space:]]+NAME/ { print \$3; }" $packages_config
-
-# multiple option lines per section
-# echo
-# echo AWK looking for busy package:
-# p=busy
-# awk "/^$p[[:space:]]+TAGG/ { \$1=\$2=\"\"; print \$0; }" $packages_config
-
-
 function cfg_name() {
 	awk "/^$1[[:space:]]+NAME/ { print \$3; }" $packages_config
 }
@@ -73,44 +52,13 @@ function pkg_version() {
 	echo "$1" | cut -f2 -d:
 }
 
-function test1() {
-
-	echo
-	echo -n 'name of ASYN: '
-	name asyn
-	echo
-	echo -n 'repo of ASYN: '
-	repo asyn
-	echo
-	echo -n 'remote of ASYN: '
-	remote asyn
-	echo
-	echo -n 'tags of ASYN:'
-	for t in $(tag asyn)
+function generate_meta() {
+	rm -f recipe.meta
+	echo "# created $(date) by $USER @ $(hostname)" >> recipe.meta
+	for uid in $(cfg_chain $1)
 	do
-		echo -n " $t"
+		echo "$uid" >> recipe.meta
 	done
-	echo
-
-	echo
-	echo -n 'branches of ADCORE:'
-	for t in $(branch adcore)
-	do
-		echo -n " $t"
-	done
-	echo
-
-	echo
-	echo -n 'path of ADCORE: '
-	path adcore
-
-	echo
-	echo -n 'chain of BAR:'
-	for t in $(chain bar)
-	do
-		echo -n " $t"
-	done
-	echo
 }
 
 function generate_release_local() {
@@ -248,6 +196,7 @@ function clean() {
 CMD=$1
 CHAIN=$2
 
+generate_meta $CHAIN
 generate_release_local $CHAIN
 generate_configsite_local $CHAIN
 
