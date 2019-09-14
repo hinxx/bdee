@@ -52,6 +52,21 @@ function pkg_version() {
   echo "$1" | cut -f2 -d:
 }
 
+function pkg_filter() {
+  if [[ -z "$2" ]]; then
+    # echo $1
+    return 0
+  fi
+  local package=
+  for package in $2; do
+    if [[ $package = $1 ]]; then
+      # echo $1
+      return 0
+    fi
+  done
+  return 1
+}
+
 function generate_meta() {
   rm -f recipe.meta
   echo "# created $(date) by $USER @ $(hostname)" >> recipe.meta
@@ -210,6 +225,8 @@ CMD=
 RECIPE=
 PACKAGE_LIST=
 VERBOSE=NO
+UIDS=
+CHAIN=NO
 POSITIONAL=()
 
 while [[ $# -gt 0 ]]; do
@@ -218,6 +235,10 @@ case $key in
   -h)
   usage
   exit 0
+  ;;
+  -c)
+  CHAIN=YES
+  shift # past argument
   ;;
   -p)
   PACKAGE_LIST="$2"
@@ -258,6 +279,7 @@ fi
 
 echo "CMD           = $CMD"
 echo "RECIPE        = $RECIPE"
+echo "CHAIN         = $CHAIN"
 echo "PACKAGE LIST  = $PACKAGE_LIST"
 echo "POSITIONAL    = ${POSITIONAL[@]}"
 
@@ -265,21 +287,37 @@ generate_meta $RECIPE
 generate_release_local $RECIPE
 generate_configsite_local $RECIPE
 
-uids=$(cfg_chain $RECIPE)
-if [[ $CMD = clean ]]; then
-  uids=$(echo "$uids" | tac)
+# get list of uids from the recipe chain
+UIDS=$(cfg_chain $RECIPE)
+if [[ $CHAIN = NO ]]; then
+  # only act on last uid in the chain
+  UIDS=$(echo $UIDS | grep -o '[^ ]\+$')
 fi
-echo uids: $uids
+# reverse the uid list if required
+if [[ $CMD = clean ]]; then
+  UIDS=$(echo "$UIDS" | tac)
+fi
+echo UIDS: $UIDS
 
-for uid in $uids
+for uid in $UIDS
 do
-  echo
-  echo package uid: $uid
-  clone $(pkg_name $uid)
-  checkout $(pkg_name $uid) $(pkg_version $uid)
-  config $(pkg_name $uid)
-  build $(pkg_name $uid)
-  echo
+  name=$(pkg_name $uid)
+  version=$(pkg_version $uid)
+  echo; echo
+
+  skip=
+  pkg_filter $name "$PACKAGE_LIST" || skip=1
+  if [[ -n $skip ]]; then
+    echo skipping package uid $uid
+    continue
+  fi
+
+  echo handling package uid $uid
+
+  clone $name
+  checkout $name $version
+  config $name
+  build $name
 done
 
 echo
