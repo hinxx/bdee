@@ -3,10 +3,10 @@
 
 # set -x
 
-packages_config=$(realpath $(dirname $0)/../packages/packages.cfg)
-recipes_config=$(realpath $(dirname $0)/../recipes/recipes.cfg)
-files_path=$(realpath $(dirname $0)/../files)
 work_path=$(pwd)
+share_path=$(realpath $(dirname $0)/../share)
+packages_config=$share_path/packages.cfg
+recipes_config=$share_path/recipes.cfg
 
 function cfg_name() {
   awk "/^$1[[:space:]]+NAME/ { print \$3; }" $packages_config
@@ -92,7 +92,7 @@ function generate_release_local() {
 function generate_configsite_local() {
   rm -f CONFIG_SITE.local
   echo "# created $(date) by $USER @ $(hostname)" >> CONFIG_SITE.local
-  cat $files_path/CONFIG_SITE.local >> CONFIG_SITE.local
+  cat $share_path/CONFIG_SITE.local >> CONFIG_SITE.local
   # echo CONFIG_SITE.local content for chain $1:; cat CONFIG_SITE.local
 }
 
