@@ -121,6 +121,39 @@ function checkout() {
   git -C $path checkout $2
 }
 
+function pull() {
+  local path=$(pkg_path $1)
+  if [[ ! -d $path ]]; then
+    echo package $1 path $path does NOT exists, can not pull
+    return 1
+  fi
+
+  echo git -C $path pull
+  git -C $path pull
+}
+
+function status() {
+  local path=$(pkg_path $1)
+  if [[ ! -d $path ]]; then
+    echo package $1 path $path does NOT exists, can not get status
+    return 1
+  fi
+
+  echo git -C $path status
+  git -C $path status
+}
+
+function diff() {
+  local path=$(pkg_path $1)
+  if [[ ! -d $path ]]; then
+    echo package $1 path $path does NOT exists, can not diff
+    return 1
+  fi
+
+  echo git -C $path diff
+  git -C $path diff
+}
+
 function config() {
   local path=$(pkg_path $1)
   if [[ ! -d $path ]]; then
@@ -303,7 +336,7 @@ for uid in $UIDS
 do
   name=$(pkg_name $uid)
   version=$(pkg_version $uid)
-  echo; echo
+  echo
 
   skip=
   pkg_filter $name "$PACKAGE_LIST" || skip=1
@@ -314,10 +347,20 @@ do
 
   echo handling package uid $uid
 
-  clone $name
-  checkout $name $version
-  config $name
-  build $name
+  case $CMD in
+    clone)      clone $name ;;
+    checkout)   checkout $name $version ;;
+    config)     config $name ;;
+    build)      build $name ;;
+    clean)      clean $name ;;
+    pull)       pull $name ;;
+    status)     status $name ;;
+    diff)       diff $name ;;
+
+    *) echo unknown command \'$CMD\', aborting!; exit 1 ;;
+  esac
+
+  echo
 done
 
 echo
