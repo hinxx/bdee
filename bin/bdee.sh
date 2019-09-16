@@ -184,8 +184,9 @@ function config() {
     fi
     return 0
   elif [[ $group = modules ]] || [[ $group = iocs ]]; then
-    # XXX this if [[ ]] is buggy !!
-    if [[ -z $(grep -q "^# BDEE local RELEASE$" $path/configure/RELEASE) ]]; then
+    local skip=YES
+    grep -q "^# BDEE local" $path/configure/RELEASE || skip=NO
+    if [[ $skip = NO ]]; then
       echo package $1 configure/RELEASE update
       sed -e '/^[^#]/ s/^#*/### /' -i $path/configure/RELEASE
       echo '# BDEE local RELEASE' >> $path/configure/RELEASE
@@ -193,8 +194,9 @@ function config() {
     else
       echo package $1 configure/RELEASE already updated
     fi
-    # XXX this if [[ ]] is buggy !!
-    if [[ -z $(grep -q "^# BDEE local CONFIG_SITE$" $path/configure/CONFIG_SITE) ]]; then
+    local skip=YES
+    grep -q "^# BDEE local" $path/configure/CONFIG_SITE || skip=NO
+    if [[ $skip = NO ]]; then
       echo package $1 configure/CONFIG_SITE update
       sed -e '/^[^#]/ s/^#*/### /' -i $path/configure/CONFIG_SITE
       echo '# BDEE local CONFIG_SITE' >> $path/configure/CONFIG_SITE
