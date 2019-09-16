@@ -78,23 +78,35 @@ function generate_meta() {
 }
 
 function generate_release_local() {
-  rm -f RELEASE.local
-  echo "# created $(date) by $USER @ $(hostname)" >> RELEASE.local
+  local f=RELEASE.local
+  # XXX: should we ever replace this? Maybe with force..
+  if [[ -f $f ]]; then
+    echo $f already exists
+    return 0
+  fi
+  echo "# created $(date) by $USER @ $(hostname)" >> $f
   for uid in $(cfg_chain $1)
   do
     local name=$(pkg_name $uid)
     local path=$(pkg_path $name)
     local name_upper=$(echo $name | tr [a-z] [A-Z] | tr '-' '_')
-    echo "$name_upper=$path" >> RELEASE.local
+    echo "$name_upper=$path" >> $f
   done
-  # echo RELEASE.local content for chain $1:; cat RELEASE.local
+  # echo $f content for chain $1:; cat $f
+  echo created $f
 }
 
 function generate_configsite_local() {
-  rm -f CONFIG_SITE.local
-  echo "# created $(date) by $USER @ $(hostname)" >> CONFIG_SITE.local
-  cat $share_path/CONFIG_SITE.local >> CONFIG_SITE.local
-  # echo CONFIG_SITE.local content for chain $1:; cat CONFIG_SITE.local
+  local f=CONFIG_SITE.local
+  # XXX: should we ever replace this? Maybe with force..
+  if [[ -f $f ]]; then
+    echo $f already exists
+    return 0
+  fi
+  echo "# created $(date) by $USER @ $(hostname)" >> $f
+  cat $share_path/CONFIG_SITE.local >> $f
+  # echo $f content for chain $1:; cat $f
+  echo created $f
 }
 
 function clone() {
@@ -164,9 +176,15 @@ function config() {
 
   local group=$(cfg_group $1)
   if [[ $group = bases ]]; then
-    echo nothing to configure for epics-base..
+    if [[ ! -f $path/configure/CONFIG_SITE.local ]]; then
+      cp $share_path/BASE_CONFIG_SITE.local $path/configure/CONFIG_SITE.local
+      echo package $1 created $path/configure/CONFIG_SITE.local
+    else
+      echo package $1 already exists $path/configure/CONFIG_SITE.local
+    fi
     return 0
   elif [[ $group = modules ]] || [[ $group = iocs ]]; then
+    # XXX this if [[ ]] is buggy !!
     if [[ -z $(grep -q "^# BDEE local RELEASE$" $path/configure/RELEASE) ]]; then
       echo package $1 configure/RELEASE update
       sed -e '/^[^#]/ s/^#*/### /' -i $path/configure/RELEASE
@@ -175,6 +193,7 @@ function config() {
     else
       echo package $1 configure/RELEASE already updated
     fi
+    # XXX this if [[ ]] is buggy !!
     if [[ -z $(grep -q "^# BDEE local CONFIG_SITE$" $path/configure/CONFIG_SITE) ]]; then
       echo package $1 configure/CONFIG_SITE update
       sed -e '/^[^#]/ s/^#*/### /' -i $path/configure/CONFIG_SITE
@@ -231,6 +250,13 @@ function build() {
   [[ $VERBOSE = NO ]] || silent=
   echo make $silent -j -C $path install
   make $silent -j -C $path install
+}
+
+function provide() {
+  clone $1
+  checkout $1
+  config $1
+  build $1
 }
 
 function clean() {
@@ -370,6 +396,7 @@ do
     checkout)   checkout $name $version ;;
     config)     config $name ;;
     build)      build $name ;;
+    provide)    provide $name ;;
     clean)      clean $name ;;
     pull)       pull $name ;;
     status)     status $name ;;
