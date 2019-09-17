@@ -69,8 +69,8 @@ function pkg_filter() {
 }
 
 function generate_meta() {
-  rm -f recipe.meta
-  echo "# created $(date) by $USER @ $(hostname)" >> recipe.meta
+  # rm -f recipe.meta
+  echo "# created $(date) by $USER @ $(hostname)" > recipe.meta
   for uid in $(cfg_chain $1)
   do
     echo "$uid" >> recipe.meta
@@ -80,11 +80,11 @@ function generate_meta() {
 function generate_release_local() {
   local f=RELEASE.local
   # XXX: should we ever replace this? Maybe with force..
-  if [[ -f $f ]]; then
-    echo $f already exists
-    return 0
-  fi
-  echo "# created $(date) by $USER @ $(hostname)" >> $f
+  # if [[ -f $f ]]; then
+  #   echo $f already exists
+  #   return 0
+  # fi
+  echo "# created $(date) by $USER @ $(hostname)" > $f
   for uid in $(cfg_chain $1)
   do
     local name=$(pkg_name $uid)
@@ -99,11 +99,11 @@ function generate_release_local() {
 function generate_configsite_local() {
   local f=CONFIG_SITE.local
   # XXX: should we ever replace this? Maybe with force..
-  if [[ -f $f ]]; then
-    echo $f already exists
-    return 0
-  fi
-  echo "# created $(date) by $USER @ $(hostname)" >> $f
+  # if [[ -f $f ]]; then
+  #   echo $f already exists
+  #   return 0
+  # fi
+  echo "# created $(date) by $USER @ $(hostname)" > $f
   cat $share_path/CONFIG_SITE.local >> $f
   # echo $f content for chain $1:; cat $f
   echo created $f
@@ -203,6 +203,11 @@ function config() {
       echo "include \$(TOP)/../CONFIG_SITE.local" >> $path/configure/CONFIG_SITE
     else
       echo package $1 configure/CONFIG_SITE already updated
+    fi
+    if [[ $group = iocs ]]; then
+      # generate IOC application binary name
+      local app=$(echo $1 | sed -e 's/ioc$/App/')
+      echo PROD_NAME = $app > $path/CONFIG.local
     fi
   elif [[ $group = support ]]; then
     if [[ ! -f $path/configure ]]; then

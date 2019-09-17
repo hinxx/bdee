@@ -7,6 +7,9 @@ RE2C = re2c
 # asyn
 DRV_USBTMC = YES
 
+# mca
+LINUX_LIBUSB-1.0_INSTALLED = YES
+
 # adsupport
 # To build the IOC applications set BUILD_IOCS to YES
 # Otherwise set it to NO
