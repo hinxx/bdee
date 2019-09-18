@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# 
+#
 
 this_path=$(realpath $(dirname $0))
 
@@ -29,7 +29,8 @@ $(envSet IOC_DIR $this_path/ioc/$ioc_name)
 $(envSet BIN_DIR $this_path/bin)
 $(envSet DB_DIR $this_path/db)
 $(envSet DBD_DIR $this_path/dbd)
-$(envSet EPICS_DB_INCLUDE_PATH, $this_path/db)
+$(envSet EPICS_DB_INCLUDE_PATH $this_path/db)
+$(envSet PATH $this_path/bin:\$PATH)
 EOF
 }
 
