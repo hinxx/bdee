@@ -3,6 +3,7 @@
 
 # set -x
 
+host_arch=linux-x86_64
 work_path=$(pwd)
 bin_path=$(realpath $(dirname $0))
 share_path=$(realpath $(dirname $0)/../share)
@@ -41,12 +42,20 @@ function cfg_chain() {
   awk "/^$1[[:space:]]+CHAIN/ { print \$3; }" $recipes_config
 }
 
+function pkg_app_name() {
+  echo $1 | sed -e 's/ioc$/App/'
+}
+
 function pkg_path() {
   echo $work_path/$1
 }
 
 function pkg_name() {
   echo "$1" | cut -f1 -d:
+}
+
+function pkg_name_variable() {
+  echo $1 | tr [a-z] [A-Z] | tr '-' '_'
 }
 
 function pkg_version() {
@@ -89,7 +98,7 @@ function generate_release_local() {
   do
     local name=$(pkg_name $uid)
     local path=$(pkg_path $name)
-    local name_upper=$(echo $name | tr [a-z] [A-Z] | tr '-' '_')
+    local name_upper=$(pkg_name_variable $name)
     echo "$name_upper=$path" >> $f
   done
   # echo $f content for chain $1:; cat $f
@@ -205,9 +214,8 @@ function config() {
       echo package $1 configure/CONFIG_SITE already updated
     fi
     if [[ $group = iocs ]]; then
-      # generate IOC application binary name
-      local app=$(echo $1 | sed -e 's/ioc$/App/')
-      echo PROD_NAME = $app > $path/CONFIG.local
+      # set IOC application binary name
+      echo PROD_NAME = $(pkg_app_name $1) > $path/CONFIG.local
     fi
   elif [[ $group = support ]]; then
     if [[ ! -f $path/configure ]]; then
@@ -257,6 +265,39 @@ function build() {
   [[ $VERBOSE = NO ]] || silent=
   echo make $silent -j -C $path install
   make $silent -j -C $path install
+}
+
+function stage() {
+  local path=$(pkg_path $1)
+  if [[ ! -d $path ]]; then
+    echo package $1 path $path does NOT exists, can not stage
+    return 1
+  fi
+
+  local stage_path=$work_path/stage
+  if [[ ! -d $stage_path ]]; then
+    mkdir -p $stage_path
+  fi
+  
+  # rm -fr $stage_path/$1
+  local group=$(cfg_group $1)
+  if [[ $group == base ]]; then
+    true
+  elif [[ $group == modules ]]; then
+    true
+  elif [[ $group == iocs ]]; then
+    rm -fr $stage_path/{bin,dbd,ioc}
+    mkdir -p $stage_path/{bin,dbd,ioc}
+    # copy ioc binary to stage
+    cp -a $path/bin/$host_arch/$(pkg_app_name $1) $stage_path/bin
+    # copy ioc DBD file to stage
+    cp -a $path/dbd/$(pkg_app_name $1).dbd $stage_path/dbd
+    # copy ioc startup files to stage
+    cp -a $path/iocBoot/$1/* $stage_path/ioc
+    # copy ioc startup script to stage
+    cp -a $bin_path/start_ioc.sh $stage_path
+    chmod +x $stage_path/start_ioc.sh
+  fi
 }
 
 function provide() {
@@ -404,6 +445,7 @@ do
     config)     config $name ;;
     build)      build $name ;;
     provide)    provide $name ;;
+    stage)      stage $name ;;
     clean)      clean $name ;;
     pull)       pull $name ;;
     status)     status $name ;;
