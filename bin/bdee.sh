@@ -267,6 +267,12 @@ function build() {
   make $silent -j -C $path install
 }
 
+function stage_prerun() {
+  local stage_path=$work_path/stage
+  rm -fr $stage_path
+  mkdir -p $stage_path/{bin,db,dbd,ioc,log,autosave}
+}
+
 function stage() {
   local path=$(pkg_path $1)
   if [[ ! -d $path ]]; then
@@ -275,26 +281,21 @@ function stage() {
   fi
 
   local stage_path=$work_path/stage
-  if [[ ! -d $stage_path ]]; then
-    mkdir -p $stage_path
-  fi
-  
-  # rm -fr $stage_path/$1
   local group=$(cfg_group $1)
-  if [[ $group == base ]]; then
-    true
+  if [[ $group == bases ]]; then
+    cp -a $path/db/* $stage_path/db
+    cp -a $path/bin/$host_arch/{caput,caget,camonitor,caRepeater} $stage_path/bin
   elif [[ $group == modules ]]; then
-    true
+    if [[ -d $path/db ]]; then
+      cp -a $path/db/* $stage_path/db
+    fi
   elif [[ $group == iocs ]]; then
-    rm -fr $stage_path/{bin,dbd,ioc}
-    mkdir -p $stage_path/{bin,dbd,ioc}
-    # copy ioc binary to stage
     cp -a $path/bin/$host_arch/$(pkg_app_name $1) $stage_path/bin
-    # copy ioc DBD file to stage
     cp -a $path/dbd/$(pkg_app_name $1).dbd $stage_path/dbd
-    # copy ioc startup files to stage
+    if [[ -d $path/db ]]; then
+      cp -a $path/db/* $stage_path/db
+    fi
     cp -a $path/iocBoot/$1/* $stage_path/ioc
-    # copy ioc startup script to stage
     cp -a $bin_path/start_ioc.sh $stage_path
     chmod +x $stage_path/start_ioc.sh
   fi
@@ -424,6 +425,12 @@ if [[ $CMD = clean ]]; then
 fi
 echo UIDS: $UIDS
 
+# prerun before diving into chain
+case $CMD in
+  stage)      stage_prerun ;;
+  *) echo no prerun for command \'$CMD\'.. ;;
+esac
+
 for uid in $UIDS
 do
   name=$(pkg_name $uid)
@@ -457,6 +464,11 @@ do
 
   echo
 done
+
+# postrun before diving into chain
+case $CMD in
+  *) echo no postrun for command \'$CMD\'.. ;;
+esac
 
 echo
 echo "success!"
