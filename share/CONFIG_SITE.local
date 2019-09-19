@@ -1,5 +1,9 @@
+# install autosave .req files into db folder
+FILE_TYPE += REQ
+INSTALL_REQ = $(INSTALL_LOCATION)/db
+
 # all modules and IOC
-CHECK_RELEASE = YES
+CHECK_RELEASE = NO
 
 # sncseq
 RE2C = re2c
