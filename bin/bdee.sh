@@ -303,7 +303,7 @@ function stage() {
 
 function provide() {
   clone $1
-  checkout $1
+  checkout $1 $2
   config $1
   build $1
 }
@@ -451,7 +451,7 @@ do
     checkout)   checkout $name $version ;;
     config)     config $name ;;
     build)      build $name ;;
-    provide)    provide $name ;;
+    provide)    provide $name $version ;;
     stage)      stage $name ;;
     clean)      clean $name ;;
     pull)       pull $name ;;
