@@ -139,8 +139,8 @@ function checkout() {
 
   # TODO: Should we check for current branch/tag or
   # just perform checkout? See git describe --all.
-  echo git -C $path checkout $2
-  git -C $path checkout $2
+  echo git --git-dir $path/.git --work-tree $path checkout $2
+  git --git-dir $path/.git --work-tree $path checkout $2
 }
 
 function pull() {
@@ -150,8 +150,8 @@ function pull() {
     return 1
   fi
 
-  echo git -C $path pull
-  git -C $path pull
+  echo git --git-dir $path/.git --work-tree $path pull
+  git --git-dir $path/.git --work-tree $path pull
 }
 
 function status() {
@@ -161,8 +161,8 @@ function status() {
     return 1
   fi
 
-  echo git -C $path status
-  git -C $path status
+  echo git --git-dir $path/.git --work-tree $path status
+  git --git-dir $path/.git --work-tree $path status
 }
 
 function diff() {
@@ -172,8 +172,8 @@ function diff() {
     return 1
   fi
 
-  echo git -C $path diff
-  git -C $path diff
+  echo git --git-dir $path/.git --work-tree $path diff
+  git --git-dir $path/.git --work-tree $path diff
 }
 
 function config() {
