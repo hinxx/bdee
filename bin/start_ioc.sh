@@ -29,6 +29,7 @@ $(envSet IOC_DIR $this_path/ioc/$ioc_name)
 $(envSet BIN_DIR $this_path/bin)
 $(envSet DB_DIR $this_path/db)
 $(envSet DBD_DIR $this_path/dbd)
+$(envSet AUTOSAVE_DIR $this_path/autosave)
 $(envSet EPICS_DB_INCLUDE_PATH $this_path/db)
 $(envSet PATH $this_path/bin:\$PATH)
 EOF

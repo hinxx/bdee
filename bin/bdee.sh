@@ -320,9 +320,9 @@ function clean() {
 }
 
 function pack() {
-  local path=$(pkg_path $1)
-  if [[ ! -d $path ]]; then
-    echo package $1 path $path does NOT exists, can not pack
+  local stage_path=$work_path/stage
+  if [[ ! -d $stage_path ]]; then
+    echo stage_path $stage_path does NOT exists, can not pack
     return 1
   fi
 
@@ -330,7 +330,7 @@ function pack() {
   $bin_path/makeself.sh \
     --bzip2 \
     --nooverwrite \
-    $path/bin \
+    $stage_path \
     $1.sh \
     "BDEE package for $1" \
     true
