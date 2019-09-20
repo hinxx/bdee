@@ -38,6 +38,10 @@ function cfg_config() {
   awk "/^$1[[:space:]]+CONFIG/ { print \$3; }" $packages_config
 }
 
+function cfg_opi() {
+  awk "/^$1[[:space:]]+OPI/ { print \$3; }" $packages_config
+}
+
 function cfg_chain() {
   awk "/^$1[[:space:]]+CHAIN/ { print \$3; }" $recipes_config
 }
@@ -130,6 +134,13 @@ function clone() {
   git clone $repo $1
 }
 
+function checkout_prerun() {
+  local opi_path=$work_path/opi
+  if [[ ! -d $opi_path ]]; then
+    mkdir -p $opi_path
+  fi
+}
+
 function checkout() {
   local path=$(pkg_path $1)
   if [[ ! -d $path ]]; then
@@ -141,6 +152,48 @@ function checkout() {
   # just perform checkout? See git describe --all.
   echo git --git-dir $path/.git --work-tree $path checkout $2
   git --git-dir $path/.git --work-tree $path checkout $2
+
+  local opi_path=$work_path/opi
+  local opi=$(cfg_opi $1)
+  if [[ -n $opi ]]; then
+    if [[ ! -h $opi_path/$1 ]]; then
+      ln -snf $path/$opi $opi_path/$1
+    fi
+  fi
+}
+
+function checkout_postrun() {
+  local opi_path=$work_path/opi
+  if [[ ! -d $opi_path ]]; then
+    echo path $opi_path does NOT exists, can not do post checkout
+    return 1
+  fi
+  cat << EOF > $opi_path/.project
+<?xml version="1.0" encoding="UTF-8"?>
+<projectDescription>
+  <name>--devel-- $1</name>
+  <comment></comment>
+  <projects></projects>
+  <buildSpec></buildSpec>
+  <natures></natures>
+  <linkedResources>
+EOF
+  pushd $opi_path >/dev/null
+  local folders=$(find . -mindepth 1 -maxdepth 1 -type l)
+  for folder in $folders; do
+    cat << EOF >> $opi_path/.project
+    <link>
+      <name>$folder</name>
+      <type>2</type>
+      <location>PROJECT_LOC/$folder</location>
+    </link>
+EOF
+  done
+  popd >/dev/null
+  cat << EOF >> $opi_path/.project
+  </linkedResources>
+</projectDescription>
+EOF
 }
 
 function pull() {
@@ -270,7 +323,7 @@ function build() {
 function stage_prerun() {
   local stage_path=$work_path/stage
   rm -fr $stage_path
-  mkdir -p $stage_path/{bin,db,dbd,ioc,log,autosave}
+  mkdir -p $stage_path/{bin,db,dbd,ioc,log,autosave,opi}
 }
 
 function stage() {
@@ -299,6 +352,48 @@ function stage() {
     cp -a $bin_path/start_ioc.sh $stage_path
     chmod +x $stage_path/start_ioc.sh
   fi
+
+  local opi_path=$stage_path/opi
+  local opi=$(cfg_opi $1)
+  if [[ -n $opi ]]; then
+    if [[ ! -d $opi_path/$1 ]]; then
+      cp -a $path/$opi $opi_path/$1
+    fi
+  fi
+}
+
+function stage_postrun() {
+  local opi_path=$work_path/stage/opi
+  if [[ ! -d $opi_path ]]; then
+    echo path $opi_path does NOT exists, can not do post stage
+    return 1
+  fi
+  cat << EOF > $opi_path/.project
+<?xml version="1.0" encoding="UTF-8"?>
+<projectDescription>
+  <name>$1</name>
+  <comment></comment>
+  <projects></projects>
+  <buildSpec></buildSpec>
+  <natures></natures>
+  <linkedResources>
+EOF
+  pushd $opi_path >/dev/null
+  local folders=$(find . -mindepth 1 -maxdepth 1 -type d)
+  for folder in $folders; do
+    cat << EOF >> $opi_path/.project
+    <link>
+      <name>$folder</name>
+      <type>2</type>
+      <location>PROJECT_LOC/$folder</location>
+    </link>
+EOF
+  done
+  popd >/dev/null
+  cat << EOF >> $opi_path/.project
+  </linkedResources>
+</projectDescription>
+EOF
 }
 
 function provide() {
@@ -428,6 +523,7 @@ echo UIDS: $UIDS
 
 # prerun before diving into chain
 case $CMD in
+  checkout)   checkout_prerun ;;
   stage)      stage_prerun ;;
   *) echo no prerun for command \'$CMD\'.. ;;
 esac
@@ -468,6 +564,8 @@ done
 
 # postrun before diving into chain
 case $CMD in
+  checkout)   checkout_postrun $RECIPE ;;
+  stage)      stage_postrun $RECIPE ;;
   *) echo no postrun for command \'$CMD\'.. ;;
 esac
 
