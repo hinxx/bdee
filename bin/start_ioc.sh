@@ -63,6 +63,13 @@ if [[ ! -f $ioc_path/st.cmd ]]; then
 fi
 echo "Using IOC startup file $ioc_path/st.cmd"
 
+if [[ ! -d $this_path/autosave ]]; then
+  mkdir -p $this_path/autosave
+fi
+if [[ ! -d $this_path/log ]]; then
+  mkdir -p $this_path/log
+fi
+
 # generate envVars file
 create_envVars
 
