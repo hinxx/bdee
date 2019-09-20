@@ -330,10 +330,11 @@ function pack() {
   $bin_path/makeself.sh \
     --bzip2 \
     --nooverwrite \
+    --tar-quietly \
     $stage_path \
-    $1.sh \
-    "BDEE package for $1" \
-    true
+    $1-$2.sh \
+    "BDEE $1-$2" \
+    echo "DONE!"
 }
 
 ###########################################################################
@@ -457,7 +458,7 @@ do
     pull)       pull $name ;;
     status)     status $name ;;
     diff)       diff $name ;;
-    pack)       pack $name ;;
+    pack)       pack $name $version ;;
 
     *) echo unknown command \'$CMD\', aborting!; exit 1 ;;
   esac
