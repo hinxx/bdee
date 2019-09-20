@@ -396,13 +396,6 @@ EOF
 EOF
 }
 
-function provide() {
-  clone $1
-  checkout $1 $2
-  config $1
-  build $1
-}
-
 function clean() {
   local path=$(pkg_path $1)
   if [[ ! -d $path ]]; then
@@ -523,53 +516,61 @@ if [[ $CMD = clean ]]; then
 fi
 echo UIDS: $UIDS
 
-# prerun before diving into chain
+# handle composite commands
 case $CMD in
-  checkout)   checkout_prerun ;;
-  stage)      stage_prerun ;;
-  *) echo no prerun for command \'$CMD\'.. ;;
+  provide)    CMDS="clone checkout config build" ;;
+  *)          CMDS="$CMD" ;;
 esac
 
-for uid in $UIDS
-do
-  name=$(pkg_name $uid)
-  version=$(pkg_version $uid)
-  echo
+# execute command(s)
+for CMD in $CMDS; do
 
-  skip=
-  pkg_filter $name "$PACKAGE_LIST" || skip=1
-  if [[ -n $skip ]]; then
-    echo skipping package uid $uid
-    continue
-  fi
-
-  echo handling package uid $uid
-
+  # execute before handling uid(s)
   case $CMD in
-    clone)      clone $name ;;
-    checkout)   checkout $name $version ;;
-    config)     config $name ;;
-    build)      build $name ;;
-    provide)    provide $name $version ;;
-    stage)      stage $name ;;
-    clean)      clean $name ;;
-    pull)       pull $name ;;
-    status)     status $name ;;
-    diff)       diff $name ;;
-    pack)       pack $name $version ;;
-
-    *) echo unknown command \'$CMD\', aborting!; exit 1 ;;
+    checkout)   checkout_prerun ;;
+    stage)      stage_prerun ;;
+    *) echo no prerun for command \'$CMD\'.. ;;
   esac
 
-  echo
-done
+  for uid in $UIDS
+  do
+    name=$(pkg_name $uid)
+    version=$(pkg_version $uid)
+    echo
 
-# postrun before diving into chain
-case $CMD in
-  checkout)   checkout_postrun $RECIPE ;;
-  stage)      stage_postrun $RECIPE ;;
-  *) echo no postrun for command \'$CMD\'.. ;;
-esac
+    skip=
+    pkg_filter $name "$PACKAGE_LIST" || skip=1
+    if [[ -n $skip ]]; then
+      echo skipping package uid $uid
+      continue
+    fi
+
+    echo executing \'$CMD\' on uid $uid
+
+    case $CMD in
+      clone)      clone $name ;;
+      checkout)   checkout $name $version ;;
+      config)     config $name ;;
+      build)      build $name ;;
+      stage)      stage $name ;;
+      clean)      clean $name ;;
+      pull)       pull $name ;;
+      status)     status $name ;;
+      diff)       diff $name ;;
+      pack)       pack $name $version ;;
+
+      *) echo unknown command \'$CMD\', aborting!; exit 1 ;;
+    esac
+  done
+
+  # execute after handling uid(s)
+  case $CMD in
+    checkout)   checkout_postrun $RECIPE ;;
+    stage)      stage_postrun $RECIPE ;;
+    *) echo no postrun for command \'$CMD\'.. ;;
+  esac
+
+done # for CMDS
 
 echo
 echo "success!"
