@@ -435,11 +435,13 @@ function pack() {
 ###########################################################################
 function usage() {
   echo
-  echo $(basename $0) command recipe [-h] [-R list]
+  echo $(basename $0) command recipe [-h] [-p list] [-v] [-c]
   echo
   echo options:
+  echo "  -c              execute command on whole chain of packages (default no)"
   echo "  -h              this text"
   echo "  -p list         list of packages to work on (optional)"
+  echo "  -v              verbose command execution (default no)"
   echo
 }
 
