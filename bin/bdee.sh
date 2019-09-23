@@ -44,6 +44,10 @@ function cfg_opi() {
   awk "/^$1[[:space:]]+OPI/ { print \$3; }" $packages_config
 }
 
+function cfg_bins() {
+  awk "/^$1[[:space:]]+BINS/ { print \$3; }" $packages_config
+}
+
 function cfg_chain() {
   awk "/^$1[[:space:]]+CHAIN/ { print \$3; }" $recipes_config
 }
@@ -344,6 +348,15 @@ function stage() {
     if [[ -d $path/db ]]; then
       cp -a $path/db/* $stage_path/db
     fi
+    local bin_file=
+    for bin_file in $(cfg_bins $1); do
+      cp -a $path/bin/$host_arch/$bin_file $stage_path/bin
+    done
+  elif [[ $group == support ]]; then
+    local bin_file=
+    for bin_file in $(cfg_bins $1); do
+      cp -a $path/bin/$bin_file $stage_path/bin
+    done
   elif [[ $group == iocs ]]; then
     cp -a $path/bin/$host_arch/$(pkg_app_name $1) $stage_path/bin
     cp -a $path/dbd/$(pkg_app_name $1).dbd $stage_path/dbd
