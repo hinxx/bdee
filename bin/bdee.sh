@@ -434,22 +434,22 @@ function upload() {
     return 1
   fi
 
-  # production of development
+  local location=
   if [[ $2 = YES ]]; then
-    if [[ ! -d $production_location ]]; then
-      echo production location $production_location does NOT exists, can not upload
-      return 1
-    fi
-    cp $archive_file $production_location
-    # make it read-only
-    chmod a-w $production_location/$archive_file
+    location=$production_location
   else
-    if [[ ! -d $devel_location ]]; then
-      echo development location $devel_location does NOT exists, can not upload
-      return 1
-    fi
-    cp $archive_file $devel_location
+    location=$devel_location
   fi
+  if [[ ! -d $location ]]; then
+    echo location $location does NOT exists, can not upload
+    return 1
+  fi
+  cp $archive_file $location
+  if [[ $2 = YES ]]; then
+    # make it read-only
+    chmod a-w $location/$archive_file
+  fi
+  echo updloaded $location/$archive_file
 }
 
 ###########################################################################
