@@ -552,6 +552,7 @@ echo UIDS: $UIDS
 # handle composite commands
 case $CMD in
   provide)    CMDS="clone checkout config build" ;;
+  release)    CMDS="clone checkout config build stage pack upload" ;;
   *)          CMDS="$CMD" ;;
 esac
 
