@@ -9,6 +9,8 @@ bin_path=$(realpath $(dirname $0))
 share_path=$(realpath $(dirname $0)/../share)
 packages_config=$share_path/packages.cfg
 recipes_config=$share_path/recipes.cfg
+devel_location=/data/www/html/bdee/devel
+production_location=/data/www/html/bdee/production
 
 function cfg_name() {
   awk "/^$1[[:space:]]+NAME/ { print \$3; }" $packages_config
@@ -40,6 +42,10 @@ function cfg_config() {
 
 function cfg_opi() {
   awk "/^$1[[:space:]]+OPI/ { print \$3; }" $packages_config
+}
+
+function cfg_bins() {
+  awk "/^$1[[:space:]]+BINS/ { print \$3; }" $packages_config
 }
 
 function cfg_chain() {
@@ -342,6 +348,15 @@ function stage() {
     if [[ -d $path/db ]]; then
       cp -a $path/db/* $stage_path/db
     fi
+    local bin_file=
+    for bin_file in $(cfg_bins $1); do
+      cp -a $path/bin/$host_arch/$bin_file $stage_path/bin
+    done
+  elif [[ $group == support ]]; then
+    local bin_file=
+    for bin_file in $(cfg_bins $1); do
+      cp -a $path/bin/$bin_file $stage_path/bin
+    done
   elif [[ $group == iocs ]]; then
     cp -a $path/bin/$host_arch/$(pkg_app_name $1) $stage_path/bin
     cp -a $path/dbd/$(pkg_app_name $1).dbd $stage_path/dbd
@@ -410,7 +425,7 @@ function clean() {
 function pack() {
   local stage_path=$work_path/stage
   if [[ ! -d $stage_path ]]; then
-    echo stage_path $stage_path does NOT exists, can not pack
+    echo stage path $stage_path does NOT exists, can not pack
     return 1
   fi
 
@@ -420,21 +435,47 @@ function pack() {
     --nooverwrite \
     --tar-quietly \
     $stage_path \
-    $1-$2.sh \
-    "BDEE $1-$2" \
+    $1.sh \
+    "BDEE recipe archive $1" \
     echo "DONE!"
+}
+
+function upload() {
+  local archive_file=$1.sh
+  if [[ ! -f $archive_file ]]; then
+    echo archive $archive_file does NOT exists, can not upload
+    return 1
+  fi
+
+  local location=
+  if [[ $2 = YES ]]; then
+    location=$production_location
+  else
+    location=$devel_location
+  fi
+  if [[ ! -d $location ]]; then
+    echo location $location does NOT exists, can not upload
+    return 1
+  fi
+  cp $archive_file $location
+  if [[ $2 = YES ]]; then
+    # make it read-only
+    chmod a-w $location/$archive_file
+  fi
+  echo updloaded $location/$archive_file
 }
 
 ###########################################################################
 function usage() {
   echo
-  echo $(basename $0) command recipe [-h] [-p list] [-v] [-c]
+  echo $(basename $0) command recipe [-h] [-p list] [-v] [-c] [-P]
   echo
   echo options:
   echo "  -c              execute command on whole chain of packages (default no)"
   echo "  -h              this text"
   echo "  -p list         list of packages to work on (optional)"
   echo "  -v              verbose command execution (default no)"
+  echo "  -P              upload to production (default devel)"
   echo
 }
 
@@ -445,6 +486,7 @@ VERBOSE=NO
 UIDS=
 CHAIN=NO
 POSITIONAL=()
+PRODUCTION=NO
 
 while [[ $# -gt 0 ]]; do
 key="$1"
@@ -464,6 +506,10 @@ case $key in
   ;;
   -v)
   VERBOSE=YES
+  shift # past argument
+  ;;
+  -P)
+  PRODUCTION=YES
   shift # past argument
   ;;
 
@@ -519,57 +565,66 @@ echo UIDS: $UIDS
 # handle composite commands
 case $CMD in
   provide)    CMDS="clone checkout config build" ;;
+  release)    CMDS="clone checkout config build stage pack upload" ;;
   *)          CMDS="$CMD" ;;
 esac
 
 # execute command(s)
 for CMD in $CMDS; do
 
-  # execute before handling uid(s)
-  case $CMD in
-    checkout)   checkout_prerun ;;
-    stage)      stage_prerun ;;
-    *) echo no prerun for command \'$CMD\'.. ;;
-  esac
+  # commands that are ran on the recipe
+  if [[ $CMD = pack ]]; then
+      pack $RECIPE
+  elif [[ $CMD = upload ]]; then
+      upload $RECIPE $PRODUCTION
+  else
 
-  for uid in $UIDS
-  do
-    name=$(pkg_name $uid)
-    version=$(pkg_version $uid)
-    echo
+    # commands that are ran on the recipe uids
 
-    skip=
-    pkg_filter $name "$PACKAGE_LIST" || skip=1
-    if [[ -n $skip ]]; then
-      echo skipping package uid $uid
-      continue
-    fi
-
-    echo executing \'$CMD\' on uid $uid
-
+    # execute before handling uid(s)
     case $CMD in
-      clone)      clone $name ;;
-      checkout)   checkout $name $version ;;
-      config)     config $name ;;
-      build)      build $name ;;
-      stage)      stage $name ;;
-      clean)      clean $name ;;
-      pull)       pull $name ;;
-      status)     status $name ;;
-      diff)       diff $name ;;
-      pack)       pack $name $version ;;
-
-      *) echo unknown command \'$CMD\', aborting!; exit 1 ;;
+      checkout)   checkout_prerun ;;
+      stage)      stage_prerun ;;
+      *) echo no prerun for command \'$CMD\'.. ;;
     esac
-  done
 
-  # execute after handling uid(s)
-  case $CMD in
-    checkout)   checkout_postrun $RECIPE ;;
-    stage)      stage_postrun $RECIPE ;;
-    *) echo no postrun for command \'$CMD\'.. ;;
-  esac
+    for uid in $UIDS
+    do
+      name=$(pkg_name $uid)
+      version=$(pkg_version $uid)
+      echo
 
+      skip=
+      pkg_filter $name "$PACKAGE_LIST" || skip=1
+      if [[ -n $skip ]]; then
+        echo skipping package uid $uid
+        continue
+      fi
+
+      echo executing \'$CMD\' on uid $uid
+
+      case $CMD in
+        clone)      clone $name ;;
+        checkout)   checkout $name $version ;;
+        config)     config $name ;;
+        build)      build $name ;;
+        stage)      stage $name ;;
+        clean)      clean $name ;;
+        pull)       pull $name ;;
+        status)     status $name ;;
+        diff)       diff $name ;;
+
+        *) echo unknown command \'$CMD\', aborting!; exit 1 ;;
+      esac
+    done
+
+    # execute after handling uid(s)
+    case $CMD in
+      checkout)   checkout_postrun $RECIPE ;;
+      stage)      stage_postrun $RECIPE ;;
+      *) echo no postrun for command \'$CMD\'.. ;;
+    esac
+  fi
 done # for CMDS
 
 echo
