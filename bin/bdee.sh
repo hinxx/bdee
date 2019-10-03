@@ -16,7 +16,7 @@ set -e
 set -u
 
 
-bdee_version=0.0.2
+bdee_version=0.0.3
 
 host_arch=linux-x86_64
 work_path=$(pwd)
@@ -105,13 +105,13 @@ function dbg() { [[ -z $DEBUG ]] || echo -e "[DBG] $@ (${FUNCNAME[1]}:${BASH_LIN
 function inf() { echo -e "[INF] ${@} (${FUNCNAME[1]}:${BASH_LINENO[0]})" >&2; }
 function err() { echo -e "\n[ERR] ${@} (${FUNCNAME[1]}:${BASH_LINENO[0]})\n" >&2; }
 
-# fun: cmd_init
+# fun: cmd_init recipe
 # txt: This function should be called at least once once,
 #      to generate config files used with later commands
 # opt: recipe: recipe uid to work with
 function cmd_init() {
   # recipe name comes from CLI
-  local recipe0="${ARGS[0]}"
+  local recipe0=$1
   if [[ -z $recipe0 ]]; then
     err missing recipe argument
     return 1
@@ -125,27 +125,30 @@ function cmd_init() {
   fi
   # lookup the recipe chain from the list of known recipes
   local uids=$(find_recipe_chain $recipe)
-  echo recipe: $recipe = $uids
+  echo 'RECIPE        = '$recipe
+  echo 'CHAIN         = '$uids
+  echo
 
   if $(opt '-f'); then
-    echo removing existing config files..
+    dbg removing existing config files..
     rm -f $recipe_config $release_config $site_config
   fi
 
   # create local recipe file specific to this build
   if [[ ! -f $recipe_config ]]; then
+    inf CREATE $(basename $recipe_config) ..
     echo "# created $(date) by $USER @ $(hostname)" > $recipe_config
     echo "# recipe $recipe" >> $recipe_config
     for uid in $uids; do
       echo "$recipe CHAIN $uid" >> $recipe_config
     done
-    echo created $recipe_config ..
     # echo content:; cat $recipe_config
   else
-    echo exists $recipe_config ..
+    dbg exists $recipe_config ..
   fi
 
   if [[ ! -f $release_config ]]; then
+    inf CREATE $(basename $release_config) ..
     echo "# created $(date) by $USER @ $(hostname)" > $release_config
     echo "# recipe $recipe" >> $release_config
     # use local recipe file specific to this build
@@ -155,20 +158,21 @@ function cmd_init() {
       local name_upper=$(pkg_name_variable $name)
       echo "$name_upper=$path" >> $release_config
     done
-    echo created $release_config ..
     # echo content:; cat $release_config
   else
-    echo exists $release_config ..
+    dbg exists $release_config ..
   fi
 
   if [[ ! -f $site_config ]]; then
+    inf CREATE $(basename $site_config) ..
     echo "# created $(date) by $USER @ $(hostname)" > $site_config
     cat $share_path/CONFIG_SITE.local >> $site_config
-    echo created $site_config ..
     # echo content:; cat $site_config
   else
-    echo exists $site_config ..
+    dbg exists $site_config ..
   fi
+
+  inf INIT DONE $recipe
 }
 
 # fun: cmd_prepare
@@ -181,13 +185,15 @@ function cmd_init() {
 function cmd_prepare() {
   local recipe=$(get_recipe_name)
   local uids=$(get_recipe_chain)
-  echo recipe $recipe = $uids
+  echo 'RECIPE        = '$recipe
+  echo 'CHAIN         = '$uids
+  echo
 
   local opi_path=$work_path/opi
   local css_project=$opi_path/project.xml
   local css_dot_project=$opi_path/.project
   if [[ ! -d $opi_path ]]; then
-    mkdir -p $opi_path
+    mkdir -p $opi_path || return 1
   fi
 
   # create CSS project file header if .project is missing
@@ -205,7 +211,6 @@ function cmd_prepare() {
   local uid=
   for uid in $uids
   do
-    echo .. package $uid
     local name=$(pkg_name $uid)
     local version=$(pkg_version $uid)
     local repo=$(cfg_repo $name)
@@ -214,37 +219,38 @@ function cmd_prepare() {
 
     # clone the GIT repository if required
     if [[ ! -d $path ]]; then
-      echo ... git clone $repo $name
+      inf GIT CLONE $uid
       git clone $repo $name || return 1
     else
-      echo ... package $uid already cloned
+      dbg package $uid already cloned
     fi
 
     # checkout the version if required
-    if [[ -d $path ]]; then
+    if [[ ! -d $path ]]; then
+      err package $uid $path does NOT exists
+      return 1
+    else
       local state=$(git --git-dir $path/.git --work-tree $path branch)
       if [[ $state != "* $version" ]] && [[ $state != "* (HEAD detached at $version)" ]]; then
-        echo ... git --git-dir $path/.git --work-tree $path checkout $version
+        inf GIT CHECKOUT $uid
         git --git-dir $path/.git --work-tree $path checkout $version || return 1
       else
-        echo ... package $uid already at version $version
+        dbg package $uid already at version $version
       fi
-    else
-      err ... package $uid $path does NOT exists
-      return 1
     fi
 
     # pull the sources if requested from CLI
     if $(opt '-p'); then
-      echo git --git-dir $path/.git --work-tree $path pull
+      inf GIT PULL $uid
       git --git-dir $path/.git --work-tree $path pull || return 1
-      echo ... package $uid pulled sourced at version $version
+      dbg package $uid pulled sourced at version $version
     fi
 
     # link OPI folder into CSS project if folder exists
     local opi=$(cfg_opi $name)
     if [[ -n $opi ]]; then
       if [[ ! -h $opi_path/$name ]]; then
+        inf DEV OPI LINK $uid
         ln -snf $path/$opi $opi_path/$name || return 1
         # create CSS project link entry  if .project is missing
         if [[ ! -f $css_dot_project ]]; then
@@ -254,38 +260,38 @@ function cmd_prepare() {
           echo '      <location>PROJECT_LOC/'$name'</location>' >> $css_project
           echo '    </link>' >> $css_project
         fi
-        echo ... package $uid OPI folder linked
+        dbg package $uid OPI folder linked
       else
-        echo ... package $uid OPI folder already linked
+        dbg package $uid OPI folder already linked
       fi
     else
-      echo ... package $uid has no OPI folder
+      dbg package $uid has no OPI folder
     fi
 
     # config package depending on the group
     if [[ $group = bases ]]; then
       if [[ ! -f $path/configure/CONFIG_SITE.local ]]; then
+        inf CONFIG $uid
         cp $share_path/BASE_CONFIG_SITE.local $path/configure/CONFIG_SITE.local || return 1
-        echo ... package $uid created ./configure/CONFIG_SITE.local
       else
-        echo ... package $uid already exists ./configure/CONFIG_SITE.local
+        dbg package $uid already exists ./configure/CONFIG_SITE.local
       fi
     elif [[ $group = modules ]] || [[ $group = iocs ]]; then
       if ! $(grep -q '^# BDEE local' $path/configure/RELEASE); then
-        echo ... package $uid  updating ./configure/RELEASE
+        inf CONFIG $uid
         sed -e '/^[^#]/ s/^#*/### /' -i $path/configure/RELEASE
         echo '# BDEE local RELEASE' >> $path/configure/RELEASE
         echo "include \$(TOP)/../RELEASE.local" >> $path/configure/RELEASE || return 1
       else
-        echo ... package $uid already updated ./configure/RELEASE
+        dbg package $uid already updated ./configure/RELEASE
       fi
       if ! $(grep -q '^# BDEE local' $path/configure/CONFIG_SITE); then
-        echo ... package $uid updating ./configure/CONFIG_SITE
+        inf CONFIG $uid
         sed -e '/^[^#]/ s/^#*/### /' -i $path/configure/CONFIG_SITE
         echo '# BDEE local CONFIG_SITE' >> $path/configure/CONFIG_SITE
         echo "include \$(TOP)/../CONFIG_SITE.local" >> $path/configure/CONFIG_SITE || return 1
       else
-        echo ... package $uid already updated ./configure/CONFIG_SITE
+        dbg package $uid already updated ./configure/CONFIG_SITE
       fi
       if [[ $group = iocs ]]; then
         # set IOC application binary name
@@ -296,35 +302,35 @@ function cmd_prepare() {
         # try to use autogen.sh script to generate configure script
         if [[ -f $path/autogen.sh ]]; then
           pushd $path >/dev/null
-          echo ... package $uid ./autogen.sh --prefix=$path $(cfg_config $name)
+          inf AUTOGEN $uid
           ./autogen.sh --prefix=$path $(cfg_config $name) || return 1
           popd >/dev/null
         else
-          echo ... package $uid ./autogen.sh NOT found
+          dbg package $uid ./autogen.sh NOT found
         fi
       fi
       if [[ ! -f $path/configure ]]; then
         # try to run autoreconf to generate configure script
         if [[ -f $path/configure.ac ]]; then
           pushd $path >/dev/null
-          echo ... package $uid autoreconf -si
+          inf AUTORECONF $uid
           autoreconf -si || return 1
           popd >/dev/null
         else
-          echo ... package $uid configure.ac NOT found
+          dbg package $uid configure.ac NOT found
         fi
       fi
       if [[ ! -f $path/Makefile ]]; then
         if [[ -f $path/configure ]]; then
           pushd $path >/dev/null
-          echo ... package $uid ./configure --prefix=$path $(cfg_config $name)
+          inf CONFIG $uid
           ./configure --prefix=$path $(cfg_config $name) || return 1
           popd >/dev/null
         else
-          echo ... package $uid configure NOT found
+          dbg package $uid configure NOT found
         fi
       else
-        echo ... package $uid already has Makefile
+        dbg package $uid already has Makefile
       fi
       if [[ ! -f $path/Makefile ]]; then
         err package $uid source does NOT have Makefile
@@ -336,9 +342,10 @@ function cmd_prepare() {
   if [[ ! -f $css_dot_project ]]; then
     echo '  </linkedResources>' >> $css_project
     echo '</projectDescription>' >> $css_project
-    cp $css_project $css_dot_project
+    cp $css_project $css_dot_project || return 1
   fi
 
+  inf PREPARE DONE $recipe
 }
 
 # fun: cmd_build
@@ -350,7 +357,9 @@ function cmd_prepare() {
 function cmd_build() {
   local recipe=$(get_recipe_name)
   local uids=$(get_recipe_chain)
-  echo recipe $recipe = $uids
+  echo 'RECIPE        = '$recipe
+  echo 'CHAIN         = '$uids
+  echo
 
   local stage_path=$work_path/stage
   local opi_path=$stage_path/opi
@@ -358,6 +367,7 @@ function cmd_build() {
   local css_dot_project=$opi_path/.project
 
   # remove stage files, will be recreated in this function
+  inf REMOVE STAGE $recipe
   rm -fr $stage_path
   mkdir -p $stage_path/{bin,db,dbd,ioc,log,autosave,opi}
 
@@ -377,9 +387,6 @@ function cmd_build() {
   local uid=
   for uid in $uids
   do
-    echo
-    echo .. package $uid
-
     local name=$(pkg_name $uid)
     local version=$(pkg_version $uid)
     local repo=$(cfg_repo $name)
@@ -387,18 +394,17 @@ function cmd_build() {
     local group=$(cfg_group $name)
 
     if [[ ! -d $path ]]; then
-      err ... package $uid source does NOT exists
+      err package $uid source does NOT exists
       return 1
     fi
 
     # clean the package if required
     if $(opt '-c'); then
+      inf CLEAN $uid
       if [[ $group = bases ]] || [[ $group = modules ]] || [[ $group = iocs ]]; then
-        echo ... make $silent -C $path -i -k uninstall realclean distclean clean
         make $silent -C $path -i -k uninstall realclean distclean clean || true
         find $path -name O.* | xargs rm -fr || true
       elif [[ $group = support ]]; then
-        echo ... make $silent -C $path -i -k clean
         make $silent -C $path -i -k clean || true
         # XXX can not do this, because the autogen.sh/configure would need to be re-ran!
         # rm -f $path/configure $path/Makefile
@@ -406,10 +412,12 @@ function cmd_build() {
     fi
 
     # build the package
-    echo ... make $silent -j -C $path install
+    inf COMPILE $uid
+    dbg make $silent -j -C $path install
     make $silent -j -C $path install || return 1
 
     # stage the package artifacts generated during the build
+    inf STAGE $uid
     if [[ $group == bases ]]; then
       cp -a $path/db/* $stage_path/db || return 1
       cp -a $path/bin/$host_arch/{caput,caget,camonitor,caRepeater} $stage_path/bin || return 1
@@ -441,6 +449,7 @@ function cmd_build() {
     local opi=$(cfg_opi $name)
     if [[ -n $opi ]]; then
       if [[ ! -d $opi_path/$name ]]; then
+        inf OPI $uid
         cp -a $path/$opi $opi_path/$name || return 1
         # create CSS project link entry
         echo '    <link>' >> $css_project
@@ -448,12 +457,12 @@ function cmd_build() {
         echo '      <type>2</type>' >> $css_project
         echo '      <location>PROJECT_LOC/'$name'</location>' >> $css_project
         echo '    </link>' >> $css_project
-        echo ... package $uid OPI folder copied
+        dbg package $uid OPI folder copied
       else
-        echo ... package $uid OPI folder already copied
+        dbg package $uid OPI folder already copied
       fi
     else
-      echo ... package $uid has no OPI folder
+      dbg package $uid has no OPI folder
     fi
 
   done
@@ -463,6 +472,7 @@ function cmd_build() {
   echo '</projectDescription>' >> $css_project
   cp $css_project $css_dot_project
 
+  inf BUILD DONE $recipe
 }
 
 # fun: cmd_status
@@ -471,14 +481,13 @@ function cmd_build() {
 function cmd_status() {
   local recipe=$(get_recipe_name)
   local uids=$(get_recipe_chain)
-  echo recipe $recipe = $uids
+  echo 'RECIPE        = '$recipe
+  echo 'CHAIN         = '$uids
+  echo
 
   local uid=
   for uid in $uids
   do
-    echo
-    echo .. package $uid
-
     local name=$(pkg_name $uid)
     local version=$(pkg_version $uid)
     local repo=$(cfg_repo $name)
@@ -486,20 +495,22 @@ function cmd_status() {
     local group=$(cfg_group $name)
 
     if [[ ! -d $path ]]; then
-      err ... package $uid source does NOT exists
+      err package $uid source does NOT exists
       return 1
     fi
 
     # perform git status on each package source
-    echo git --git-dir $path/.git --work-tree $path status --short --branch --porcelain
-    git --git-dir $path/.git --work-tree $path status --short --branch --porcelain || return 1
+    inf GIT STATUS $uid
+    git --git-dir $path/.git --work-tree $path status --short --branch || return 1
 
     # perform git diff on each package source if requested from CLI
     if $(opt '-d'); then
-      echo git --git-dir $path/.git --work-tree $path diff
-      git --git-dir $path/.git --work-tree $path diff || return 1
+      inf GIT DIFF $uid
+      git --git-dir $path/.git --work-tree $path --no-pager diff || return 1
     fi
   done
+
+  inf STATUS DONE $recipe
 }
 
 # fun: cmd_release
@@ -508,16 +519,19 @@ function cmd_status() {
 function cmd_release() {
   local recipe=$(get_recipe_name)
   local uids=$(get_recipe_chain)
-  echo recipe $recipe = $uids
+  echo 'RECIPE        = '$recipe
+  echo 'CHAIN         = '$uids
+  echo
 
   local stage_path=$work_path/stage
   if [[ ! -d $stage_path ]]; then
-    err ... recipe $recipe stage does NOT exists
+    err recipe $recipe stage does NOT exists
     return 1
   fi
 
   local archive_file=$recipe.sh
-  # from https://makeself.io/
+  inf ARCHIVE $recipe
+  # using https://makeself.io/
   $bin_path/makeself.sh \
     --bzip2 \
     --nooverwrite \
@@ -528,7 +542,7 @@ function cmd_release() {
     echo "DONE!" || return 1
 
   if [[ ! -d $dist_location ]]; then
-    echo destination $dist_location does NOT exists, can not upload
+    err destination $dist_location does NOT exists, can not upload
     return 1
   fi
 
@@ -536,10 +550,13 @@ function cmd_release() {
   if $(opt '-r'); then
     rm -f $dist_location/$archive_file
   fi
+  inf UPLOAD $recipe
   cp $archive_file $dist_location || return 1
   # make it read-only
   chmod a-w $dist_location/$archive_file || return 1
-  echo updloaded $dist_location/$archive_file
+  inf updloaded $dist_location/$archive_file
+
+  inf RELEASE DONE $recipe
 }
 
 # fun: usage
@@ -576,7 +593,7 @@ function usage() {
 function opt() {
   [[ -n $1 ]] || return 1
   local pos=
-  for pos in "${ARGS[@]}"; do
+  for pos in $ARGS; do
     if [[ $pos = $1 ]]; then return 0; fi
   done
   return 1
@@ -593,9 +610,9 @@ function opt() {
 [[ $# -gt 0 ]] || { usage; exit 1; }
 CMD="$1"
 shift
-ARGS=("")
+ARGS=
 for i in "$@"; do
-  ARGS+=("$i")
+  ARGS="$ARGS $i"
 done
 
 VERBOSE=
@@ -608,11 +625,10 @@ if $(opt '-D'); then
 fi
 
 echo
-echo "CMD           = $CMD"
-echo "ARGS          = ${ARGS[@]}"
-echo "VERBOSE       = $VERBOSE"
-echo "DEBUG         = $DEBUG"
-echo
+echo 'CMD           = '$CMD
+echo 'ARGS          = '$ARGS
+echo 'VERBOSE       = '$VERBOSE
+echo 'DEBUG         = '$DEBUG
 
 STATUS=0
 
@@ -620,7 +636,7 @@ if [[ $CMD = help ]]; then
   usage
 
 elif [[ $CMD = init ]]; then
-  cmd_init || STATUS=1
+  cmd_init $ARGS || STATUS=1
 
 elif [[ $CMD = prepare ]]; then
   cmd_prepare || STATUS=1
