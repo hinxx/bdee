@@ -2,6 +2,8 @@
 #
 
 # set -x
+set -e
+set -u
 
 # mod: bdee
 # txt: this module is for building EPICS modules and IOCs.
@@ -17,8 +19,7 @@ recipes_config=$share_path/recipes.cfg
 recipe_config=$work_path/recipe.cfg
 release_config=$work_path/RELEASE.local
 site_config=$work_path/CONFIG_SITE.local
-devel_location=/data/www/html/bdee/devel
-production_location=/data/www/html/bdee/production
+dist_location=/data/www/html/bdee/dist
 
 function cfg_name() {
   awk "/^$1[[:space:]]+NAME/ { print \$3; }" $packages_config
@@ -222,40 +223,40 @@ function pkg_filter() {
 # EOF
 # }
 
-function pull() {
-  local path=$(pkg_path $1)
-  if [[ ! -d $path ]]; then
-    echo package $1 path $path does NOT exists, can not pull
-    return 1
-  fi
+# function pull() {
+#   local path=$(pkg_path $1)
+#   if [[ ! -d $path ]]; then
+#     echo package $1 path $path does NOT exists, can not pull
+#     return 1
+#   fi
 
-  echo git --git-dir $path/.git --work-tree $path pull
-  git --git-dir $path/.git --work-tree $path pull
-}
+#   echo git --git-dir $path/.git --work-tree $path pull
+#   git --git-dir $path/.git --work-tree $path pull
+# }
 
-function status() {
-  local path=$(pkg_path $1)
-  if [[ ! -d $path ]]; then
-    echo package $1 path $path does NOT exists, can not get status
-    return 1
-  fi
+# function status() {
+#   local path=$(pkg_path $1)
+#   if [[ ! -d $path ]]; then
+#     echo package $1 path $path does NOT exists, can not get status
+#     return 1
+#   fi
 
-  echo git --git-dir $path/.git --work-tree $path status
-  git --git-dir $path/.git --work-tree $path status
-}
+#   echo git --git-dir $path/.git --work-tree $path status
+#   git --git-dir $path/.git --work-tree $path status
+# }
 
-function diff() {
-  local path=$(pkg_path $1)
-  if [[ ! -d $path ]]; then
-    echo package $1 path $path does NOT exists, can not diff
-    return 1
-  fi
+# function diff() {
+#   local path=$(pkg_path $1)
+#   if [[ ! -d $path ]]; then
+#     echo package $1 path $path does NOT exists, can not diff
+#     return 1
+#   fi
 
-  echo git --git-dir $path/.git --work-tree $path diff
-  git --git-dir $path/.git --work-tree $path diff
-}
+#   echo git --git-dir $path/.git --work-tree $path diff
+#   git --git-dir $path/.git --work-tree $path diff
+# }
 
-# function config() {
+# # function config() {
 #   local path=$(pkg_path $1)
 #   if [[ ! -d $path ]]; then
 #     echo package $1 path $path does NOT exists, can not config
@@ -442,56 +443,56 @@ function diff() {
 #   make -C $path clean
 # }
 
-function pack() {
-  local stage_path=$work_path/stage
-  if [[ ! -d $stage_path ]]; then
-    echo stage path $stage_path does NOT exists, can not pack
-    return 1
-  fi
+# function pack() {
+#   local stage_path=$work_path/stage
+#   if [[ ! -d $stage_path ]]; then
+#     echo stage path $stage_path does NOT exists, can not pack
+#     return 1
+#   fi
 
-  # from https://makeself.io/
-  $bin_path/makeself.sh \
-    --bzip2 \
-    --nooverwrite \
-    --tar-quietly \
-    $stage_path \
-    $1.sh \
-    "BDEE recipe archive $1" \
-    echo "DONE!"
-}
+#   # from https://makeself.io/
+#   $bin_path/makeself.sh \
+#     --bzip2 \
+#     --nooverwrite \
+#     --tar-quietly \
+#     $stage_path \
+#     $1.sh \
+#     "BDEE recipe archive $1" \
+#     echo "DONE!"
+# }
 
-function upload() {
-  local archive_file=$1.sh
-  if [[ ! -f $archive_file ]]; then
-    echo archive $archive_file does NOT exists, can not upload
-    return 1
-  fi
+# function upload() {
+#   local archive_file=$1.sh
+#   if [[ ! -f $archive_file ]]; then
+#     echo archive $archive_file does NOT exists, can not upload
+#     return 1
+#   fi
 
-  local location=
-  if [[ $2 = YES ]]; then
-    location=$production_location
-  else
-    location=$devel_location
-  fi
-  if [[ ! -d $location ]]; then
-    echo location $location does NOT exists, can not upload
-    return 1
-  fi
-  cp $archive_file $location
-  if [[ $2 = YES ]]; then
-    # make it read-only
-    chmod a-w $location/$archive_file
-  fi
-  echo updloaded $location/$archive_file
-}
-
-
+#   local location=
+#   if [[ $2 = YES ]]; then
+#     location=$production_location
+#   else
+#     location=$devel_location
+#   fi
+#   if [[ ! -d $location ]]; then
+#     echo location $location does NOT exists, can not upload
+#     return 1
+#   fi
+#   cp $archive_file $location
+#   if [[ $2 = YES ]]; then
+#     # make it read-only
+#     chmod a-w $location/$archive_file
+#   fi
+#   echo updloaded $location/$archive_file
+# }
 
 
 
-function err() {
-  echo -e "\n[ERR] ${FUNCNAME[1]}:${BASH_LINENO[0]} ${@}\n" >&2;
-}
+##################################################################################
+
+function dbg() { [[ -z $DEBUG ]] || echo -e "[DBG] $@ (${FUNCNAME[1]}:${BASH_LINENO[0]})" >&2; }
+function inf() { echo -e "[INF] ${@} (${FUNCNAME[1]}:${BASH_LINENO[0]})" >&2; }
+function err() { echo -e "\n[ERR] ${@} (${FUNCNAME[1]}:${BASH_LINENO[0]})\n" >&2; }
 
 function opt() {
   [[ -n $1 ]] || return 1
@@ -630,6 +631,13 @@ function cmd_prepare() {
       return 1
     fi
 
+    ## pull the sources if requested from CLI
+    if $(opt '-p'); then
+      echo git --git-dir $path/.git --work-tree $path pull
+      git --git-dir $path/.git --work-tree $path pull || return 1
+      echo ... package $uid pulled sourced at version $version
+    fi
+
     ## link OPI folder into CSS project if folder exists
     local opi=$(cfg_opi $name)
     if [[ -n $opi ]]; then
@@ -738,11 +746,6 @@ function cmd_build() {
   echo CMD BUILD: $chain
   echo chain uids: $uids
 
-  local silent=-s
-  if $(opt '-v'); then
-    silent=
-  fi
-
   local stage_path=$work_path/stage
   local opi_path=$stage_path/opi
   local css_project=$opi_path/project.xml
@@ -761,6 +764,9 @@ function cmd_build() {
   echo '  <buildSpec></buildSpec>' >> $css_project
   echo '  <natures></natures>' >> $css_project
   echo '  <linkedResources>' >> $css_project
+
+  local silent=-s
+  [[ -z $VERBOSE ]] || silent=
 
   local uid=
   for uid in $uids
@@ -853,20 +859,110 @@ function cmd_build() {
 
 }
 
+# fun: cmd_status
+# txt: show status of the packages
+function cmd_status() {
+  local chain=$(load_chain_name)
+  local uids=$(load_chain)
+  echo CMD BUILD: $chain
+  echo chain uids: $uids
+
+  local uid=
+  for uid in $uids
+  do
+    echo
+    echo .. package $uid
+
+    local name=$(pkg_name $uid)
+    local version=$(pkg_version $uid)
+    local repo=$(cfg_repo $name)
+    local path=$(pkg_path $name)
+    local group=$(cfg_group $name)
+
+    if [[ ! -d $path ]]; then
+      err ... package $uid source does NOT exists
+      return 1
+    fi
+
+    # perform git status on each package source
+    echo git --git-dir $path/.git --work-tree $path status --short --branch --porcelain
+    git --git-dir $path/.git --work-tree $path status --short --branch --porcelain || return 1
+
+    # perform git diff on each package source if requested from CLI
+    if $(opt '-d'); then
+      echo git --git-dir $path/.git --work-tree $path diff
+      git --git-dir $path/.git --work-tree $path diff || return 1
+    fi
+  done
+}
+
+# fun: cmd_release
+# txt: create archive of the built and copy it to a distribution location
+function cmd_release() {
+  local chain=$(load_chain_name)
+  local uids=$(load_chain)
+  echo CMD BUILD: $chain
+  echo chain uids: $uids
+
+  local stage_path=$work_path/stage
+  if [[ ! -d $stage_path ]]; then
+    err ... recipe $chain stage does NOT exists
+    return 1
+  fi
+
+  local archive_file=$chain.sh
+  # from https://makeself.io/
+  $bin_path/makeself.sh \
+    --bzip2 \
+    --nooverwrite \
+    --tar-quietly \
+    $stage_path \
+    $archive_file \
+    "BDEE recipe archive $chain" \
+    echo "DONE!" || return 1
+
+  if [[ ! -d $dist_location ]]; then
+    echo destination $dist_location does NOT exists, can not upload
+    return 1
+  fi
+
+  # remove the archive at destination if requested from CLI
+  if $(opt '-r'); then
+    rm -f $dist_location/$archive_file
+  fi
+  cp $archive_file $dist_location || return 1
+  # make it read-only
+  chmod a-w $dist_location/$archive_file || return 1
+  echo updloaded $dist_location/$archive_file
+}
 
 function usage() {
   echo
-  echo $(basename $0) command [command arguments]
+  echo $(basename $0) command [command arguments] [common options]
+  echo
+  echo common options:
+  echo "     -V               verbose execution of commands"
+  echo "     -D               debug output"
   echo
   echo commands:
   echo " > init               initialize the working folder with config files"
   echo "     recipe           use recipe name from $recipes_config"
   echo "     -f               force regeneration of config files"
-  echo
+  # echo
   echo " > prepare            prepare the recipe for building"
-  echo
+  echo "     -p               perform git pull after config"
+  # echo
   echo " > build              build the recipe"
   echo "     -c               perform clean before build"
+  # echo
+  echo " > status             show status of the recipe"
+  echo "     -d               perform git diff"
+  # echo
+  echo " > release            pack artifacts and upload the archive"
+  echo "     -r               remove the archive at destination folder"
+  echo "     -l               destination folder"
+  echo
+  echo "tool version $bdee_version"
   echo
   # echo options:
   # echo "  -c              execute command on whole chain of packages (default no)"
@@ -943,9 +1039,12 @@ function usage() {
 # CLI arguments
 #  - first is always command
 #  - the rest are arguments to the command, handled in command context
+[[ $# -gt 0 ]] || { usage; exit 1; }
+
 CMD="$1"
 shift
 # ARGS="$@"
+ARGS=("")
 for i in "$@"; do
   ARGS+=("$i")
 done
@@ -955,18 +1054,28 @@ done
 #   VERBOSE=YES
 # fi
 
-echo BDEE $bdee_version
+VERBOSE=
+if $(opt '-V'); then
+  VERBOSE=YES
+fi
+DEBUG=
+if $(opt '-D'); then
+  DEBUG=YES
+fi
+
+# echo BDEE $bdee_version
 echo
 # echo "POSITIONAL    = ${POSITIONAL[@]}"
 # echo "CHAIN         = $CHAIN"
 # echo "PACKAGE LIST  = $PACKAGE_LIST"
 echo "CMD           = $CMD"
 echo "ARGS          = ${ARGS[@]}"
-# echo "VERBOSE       = $VERBOSE"
+echo "VERBOSE       = $VERBOSE"
+echo "DEBUG         = $DEBUG"
 # echo "RECIPE        = $RECIPE"
 echo
 
-[[ -n $CMD ]] || { usage; exit 1; }
+# [[ -n $CMD ]] || { usage; exit 1; }
 # [[ -n $RECIPE ]] || { usage; exit 1; }
 
 if [[ $CMD = init ]]; then
@@ -987,6 +1096,19 @@ if [[ $CMD = build ]]; then
   echo SUCCESS
   exit 0
 fi
+
+if [[ $CMD = status ]]; then
+  cmd_status || exit 1
+  echo SUCCESS
+  exit 0
+fi
+
+if [[ $CMD = release ]]; then
+  cmd_release || exit 1
+  echo SUCCESS
+  exit 0
+fi
+
 
 echo
 echo FAILED!!!!
