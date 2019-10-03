@@ -441,7 +441,7 @@ function cmd_build() {
         cp -a $path/db/* $stage_path/db || return 1
       fi
       cp -a $path/iocBoot/$name/* $stage_path/ioc || return 1
-      cp -a $bin_path/start_ioc.sh $stage_path || return 1
+      cp -a $share_path/start_ioc.sh $stage_path || return 1
       chmod +x $stage_path/start_ioc.sh
     fi
 
