@@ -21,6 +21,7 @@ bdee_version=0.0.3
 host_arch=linux-x86_64
 work_path=$(pwd)
 bin_path=$(realpath $(dirname $0))
+tools_path=$(realpath $(dirname $0)/../tools)
 share_path=$(realpath $(dirname $0)/../share)
 packages_config=$share_path/packages.cfg
 recipes_config=$share_path/recipes.cfg
@@ -532,7 +533,7 @@ function cmd_release() {
   local archive_file=$recipe.sh
   inf ARCHIVE $recipe
   # using https://makeself.io/
-  $bin_path/makeself.sh \
+  $tools_path/makeself.sh \
     --bzip2 \
     --nooverwrite \
     --tar-quietly \
